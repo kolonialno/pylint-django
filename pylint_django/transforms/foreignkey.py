@@ -1,12 +1,15 @@
 from itertools import chain
+from os import environ
 
 from astroid import (
     MANAGER, nodes, InferenceError, inference_tip,
-    UseInferenceDefault
+    UseInferenceDefault, AstroidImportError
 )
 from astroid.nodes import ClassDef, Attribute
 
 from pylint_django.utils import node_is_subclass
+
+MODEL_IMPORT_PATH = environ.get('MODEL_IMPORT_PATH')
 
 
 def is_foreignkey_in_class(node):
@@ -93,7 +96,14 @@ def infer_key_classes(node, context=None):
                 module_name += '.models'
                 # ensure that module is loaded in astroid_cache, for cases when models is a package
                 if module_name not in MANAGER.astroid_cache:
-                    MANAGER.ast_from_module_name(module_name)
+                    try:
+                        MANAGER.ast_from_module_name(module_name)
+                    except AstroidImportError:
+                        if MODEL_IMPORT_PATH:
+                            module_name = f"{MODEL_IMPORT_PATH}.{module_name}"
+                            MANAGER.ast_from_module_name(module_name)
+                        else:
+                            raise
 
             # create list from dict_values, because it may be modified in a loop
             for module in list(MANAGER.astroid_cache.values()):
